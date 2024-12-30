@@ -1,8 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mobile Tetris</title>
     <style>
@@ -132,10 +132,7 @@
         <source src="https://www.myinstants.com/media/sounds/perfect-flute.mp3" type="audio/mpeg">
     </audio>
     <audio id="gameOverSound">
-        <source src="https://ww
-
-> Dhruv Mehta 2022:
-w.myinstants.com/media/sounds/wah-wah-sad-trombone-sound-effect.mp3" type="audio/mpeg">
+        <source src="https://www.myinstants.com/media/sounds/wah-wah-sad-trombone-sound-effect.mp3" type="audio/mpeg">
     </audio>
 
     <script>
@@ -166,6 +163,9 @@ w.myinstants.com/media/sounds/wah-wah-sad-trombone-sound-effect.mp3" type="audio
         let touchStartY = null;
         let isPaused = false;
         let isMuted = false;
+        let isDraggingDown = false;
+        let dragStartY = null;
+        let dragInitialY = null;
 
         const colors = {
             I: 'cyan', J: 'blue', L: 'orange', O: 'yellow', S: 'green', T: 'purple', Z: 'red'
@@ -292,7 +292,7 @@ w.myinstants.com/media/sounds/wah-wah-sad-trombone-sound-effect.mp3" type="audio
         }
 
         function movePiece(offsetX) {
-            if (!isPaused && isValidMove(offsetX, 0)) {
+            if (!isPaused && !isDraggingDown && isValidMove(offsetX, 0)) {
                 pieceX += offsetX;
                 drawBoard();
             }
@@ -313,7 +313,7 @@ w.myinstants.com/media/sounds/wah-wah-sad-trombone-sound-effect.mp3" type="audio
         }
 
         function rotatePiece() {
-            if (!isPaused) {
+            if (!isPaused && !isDraggingDown) {
                 const rotatedShape = currentPiece.shape[0].map((val, index) => currentPiece.shape.map(row => row[index]).reverse());
                 if (isValidMove(0, 0, rotatedShape)) {
                     currentPiece.shape = rotatedShape;
@@ -352,10 +352,7 @@ w.myinstants.com/media/sounds/wah-wah-sad-trombone-sound-effect.mp3" type="audio
 
         function checkLevelUp() {
             const levelThresholds = [0, 1000, 3000, 7000, 15000, 30000]; // More spread out thresholds
-            if (level < levelThresholds.length - 1 && score >= level
-
->
-Thresholds[level]) {
+            if (level < levelThresholds.length - 1 && score >= levelThresholds[level]) {
                 level++;
                 levelElement.textContent = level;
                 gameSpeed *= 0.85; // Slightly less aggressive speed increase
@@ -422,6 +419,7 @@ Thresholds[level]) {
 
             if (Math.abs(diffX) > Math.abs(diffY)) {
                 // Horizontal swipe
+                isDraggingDown = false;
                 if (diffX > 30) {
                     movePiece(1); // Swipe right
                     touchStartX = null;
@@ -433,17 +431,41 @@ Thresholds[level]) {
                 }
             } else {
                 // Vertical swipe
-                if (diffY > 50) {
-                    moveDown(); // Swipe down (faster drop)
-                    touchStartX = null;
-                    touchStartY = null;
+                if (diffY > 30) { // Threshold for considering it a down swipe
+                    if (!isDraggingDown) {
+                        isDraggingDown = true;
+                        dragStartY = touchStartY;
+                        dragInitialY = pieceY;
+                    }
+                    let dragOffset = Math.floor((touchEndY - dragStartY) / (boardElement.offsetHeight / boardHeight)); // Scale the drag
+                    let newY = dragInitialY + dragOffset;
+
+                    // Keep piece within bounds
+                    let potentialPieceY = newY;
+                    while (!isValidMove(0, potentialPieceY - pieceY)) {
+                        potentialPieceY--;
+                        if (potentialPieceY < 0) break; // Avoid infinite loop
+                    }
+                    pieceY = potentialPieceY;
+                    drawBoard();
                 }
             }
         }, false);
 
         boardElement.addEventListener('touchend', (e) => {
-            // Tap for rotate
-            if (touchStartX && touchStartY) {
+            if (isDraggingDown) {
+                isDraggingDown = false;
+                // Upon releasing after dragging down, try to settle the piece
+                while (isValidMove(0, 1)) {
+                    pieceY++;
+                }
+                freezePiece();
+                playSound(placeSound);
+                clearLines();
+                spawnPiece();
+                drawBoard();
+            } else if (touchStartX && touchStartY) {
+                // Tap for rotate
                 const touchEndX = e.changedTouches[0].clientX;
                 const touchEndY = e.changedTouches[0].clientY;
                 const distX = Math.abs(touchEndX - touchStartX);
@@ -455,6 +477,8 @@ Thresholds[level]) {
             }
             touchStartX = null;
             touchStartY = null;
+            dragStartY = null;
+            dragInitialY = null;
         }, false);
 
         // Button controls
