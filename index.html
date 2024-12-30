@@ -9,7 +9,7 @@
         body {
             background: linear-gradient(to bottom, #333, #111);
             color: #eee;
-            font-family: sans-serif;
+            font-family: 'Arial', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -18,8 +18,46 @@
             overflow: hidden;
         }
 
-        #game-container {
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
             display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            text-align: center;
+        }
+
+        #splash-screen h1 {
+            font-size: 3em;
+            margin-bottom: 0.5em;
+            text-shadow: 2px 2px 4px #000;
+            font-family: 'Courier New', monospace; /* A classy font */
+        }
+
+        #splash-screen p {
+            font-size: 1.2em;
+            margin-bottom: 0.3em;
+        }
+
+        #splash-screen button {
+            padding: 10px 20px;
+            font-size: 1.1em;
+            background-color: #666;
+            color: #eee;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 1em;
+        }
+
+        #game-container {
+            display: none; /* Initially hidden */
             flex-direction: column;
             align-items: center;
         }
@@ -102,6 +140,15 @@
     </style>
 </head>
 <body>
+    <div id="splash-screen">
+        <h1>Tetris</h1>
+        <p style="font-style: italic;">Created by Dhruv</p>
+        <p><strong>Instructions:</strong></p>
+        <p>Swipe left/right to move the piece.</p>
+        <p>Tap to rotate the piece.</p>
+        <p>Swipe down to quickly drop the piece.</p>
+        <button id="start-game-button">Start Game</button>
+    </div>
     <div id="game-container">
         <div id="game-board"></div>
         <div id="info">
@@ -112,10 +159,6 @@
             <div id="next-piece-preview"></div>
         </div>
         <div id="controls">
-            <button class="control-button" onclick="movePiece(-1)">Left</button>
-            <button class="control-button" onclick="rotatePiece()">Rotate</button>
-            <button class="control-button" onclick="movePiece(1)">Right</button>
-            <button class="control-button" onclick="moveDown()">Down</button>
             <button class="control-button" id="pause-button">Pause</button>
             <button class="control-button" id="mute-button">Mute</button>
         </div>
@@ -136,6 +179,9 @@
     </audio>
 
     <script>
+        const splashScreen = document.getElementById('splash-screen');
+        const startGameButton = document.getElementById('start-game-button');
+        const gameContainer = document.getElementById('game-container');
         const boardWidth = 10;
         const boardHeight = 20;
         const boardElement = document.getElementById('game-board');
@@ -393,12 +439,16 @@
         }
 
         function startGame() {
+            splashScreen.style.display = 'none';
+            gameContainer.style.display = 'flex';
             highScoreElement.textContent = getHighScore();
             spawnPiece();
             gameInterval = setInterval(gameLoop, gameSpeed);
             drawBoard();
             backgroundMusic.play();
         }
+
+        startGameButton.addEventListener('click', startGame);
 
         // Touch controls
         boardElement.addEventListener('touchstart', (e) => {
@@ -417,37 +467,29 @@
             const diffX = touchEndX - touchStartX;
             const diffY = touchEndY - touchStartY;
 
-            if (Math.abs(diffX) > Math.abs(diffY)) {
+            if (Math.abs(diffX) > Math.abs(diffY) * 1.5) { // Prioritize horizontal swipe
                 // Horizontal swipe
                 isDraggingDown = false;
                 if (diffX > 30) {
                     movePiece(1); // Swipe right
-                    touchStartX = null;
-                    touchStartY = null;
+                    touchStartX = touchEndX; // Update start for continuous swipe
+                    touchStartY = touchStartY;
                 } else if (diffX < -30) {
                     movePiece(-1); // Swipe left
-                    touchStartX = null;
-                    touchStartY = null;
+                    touchStartX = touchEndX; // Update start for continuous swipe
+                    touchStartY = touchStartY;
                 }
-            } else {
-                // Vertical swipe
-                if (diffY > 30) { // Threshold for considering it a down swipe
+            } else if (diffY > Math.abs(diffX) * 1.5) {
+                // Vertical swipe (down)
+                if (diffY > 30) {
                     if (!isDraggingDown) {
                         isDraggingDown = true;
-                        dragStartY = touchStartY;
-                        dragInitialY = pieceY;
+                        // Directly drop the piece
+                        while (isValidMove(0, 1)) {
+                            pieceY++;
+                        }
+                        drawBoard(); // Update the board immediately
                     }
-                    let dragOffset = Math.floor((touchEndY - dragStartY) / (boardElement.offsetHeight / boardHeight)); // Scale the drag
-                    let newY = dragInitialY + dragOffset;
-
-                    // Keep piece within bounds
-                    let potentialPieceY = newY;
-                    while (!isValidMove(0, potentialPieceY - pieceY)) {
-                        potentialPieceY--;
-                        if (potentialPieceY < 0) break; // Avoid infinite loop
-                    }
-                    pieceY = potentialPieceY;
-                    drawBoard();
                 }
             }
         }, false);
@@ -455,10 +497,6 @@
         boardElement.addEventListener('touchend', (e) => {
             if (isDraggingDown) {
                 isDraggingDown = false;
-                // Upon releasing after dragging down, try to settle the piece
-                while (isValidMove(0, 1)) {
-                    pieceY++;
-                }
                 freezePiece();
                 playSound(placeSound);
                 clearLines();
@@ -498,7 +536,8 @@
             backgroundMusic.muted = isMuted;
         });
 
-        startGame();
+        // Initialize high score on page load
+        highScoreElement.textContent = getHighScore();
     </script>
 </body>
 </html>
