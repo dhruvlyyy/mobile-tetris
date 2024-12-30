@@ -210,8 +210,8 @@
         let isPaused = false;
         let isMuted = false;
         let isDraggingDown = false;
-        let dragStartY = null;
-        let dragInitialY = null;
+        let dragThreshold = 50; // Increased threshold for down swipe
+        let fastDropInterval;
 
         const colors = {
             I: 'cyan', J: 'blue', L: 'orange', O: 'yellow', S: 'green', T: 'purple', Z: 'red'
@@ -409,6 +409,7 @@
 
         function gameOver() {
             clearInterval(gameInterval);
+            clearInterval(fastDropInterval); // Clear any ongoing fast drop
             playSound(gameOverSound);
             alert(`Game Over! Your score: ${score}`);
             if (score > getHighScore()) {
@@ -457,7 +458,7 @@
         }, false);
 
         boardElement.addEventListener('touchmove', (e) => {
-            if (!touchStartX || !touchStartY) {
+            if (!touchStartX || !touchStartY || isPaused) {
                 return;
             }
 
@@ -467,29 +468,23 @@
             const diffX = touchEndX - touchStartX;
             const diffY = touchEndY - touchStartY;
 
-            if (Math.abs(diffX) > Math.abs(diffY) * 1.5) { // Prioritize horizontal swipe
+            if (Math.abs(diffX) > Math.abs(diffY) * 1.5) {
                 // Horizontal swipe
                 isDraggingDown = false;
+                clearInterval(fastDropInterval);
                 if (diffX > 30) {
-                    movePiece(1); // Swipe right
-                    touchStartX = touchEndX; // Update start for continuous swipe
-                    touchStartY = touchStartY;
+                    movePiece(1);
+                    touchStartX = touchEndX;
                 } else if (diffX < -30) {
-                    movePiece(-1); // Swipe left
-                    touchStartX = touchEndX; // Update start for continuous swipe
-                    touchStartY = touchStartY;
+                    movePiece(-1);
+                    touchStartX = touchEndX;
                 }
-            } else if (diffY > Math.abs(diffX) * 1.5) {
-                // Vertical swipe (down)
-                if (diffY > 30) {
-                    if (!isDraggingDown) {
-                        isDraggingDown = true;
-                        // Directly drop the piece
-                        while (isValidMove(0, 1)) {
-                            pieceY++;
-                        }
-                        drawBoard(); // Update the board immediately
-                    }
+            } else if (diffY > dragThreshold) {
+                // Down swipe
+                if (!isDraggingDown) {
+                    isDraggingDown = true;
+                    clearInterval(fastDropInterval);
+                    fastDropInterval = setInterval(moveDown, 100); // Increased drop speed
                 }
             }
         }, false);
@@ -497,13 +492,17 @@
         boardElement.addEventListener('touchend', (e) => {
             if (isDraggingDown) {
                 isDraggingDown = false;
+                clearInterval(fastDropInterval);
+                // Force the piece to settle immediately upon releasing the down swipe
+                while (isValidMove(0, 1)) {
+                    pieceY++;
+                }
                 freezePiece();
                 playSound(placeSound);
                 clearLines();
                 spawnPiece();
                 drawBoard();
-            } else if (touchStartX && touchStartY) {
-                // Tap for rotate
+            } else if (touchStartX !== null && touchStartY !== null) {
                 const touchEndX = e.changedTouches[0].clientX;
                 const touchEndY = e.changedTouches[0].clientY;
                 const distX = Math.abs(touchEndX - touchStartX);
@@ -515,8 +514,6 @@
             }
             touchStartX = null;
             touchStartY = null;
-            dragStartY = null;
-            dragInitialY = null;
         }, false);
 
         // Button controls
@@ -527,6 +524,7 @@
                 gameInterval = setInterval(gameLoop, gameSpeed);
             } else {
                 clearInterval(gameInterval);
+                clearInterval(fastDropInterval); // Pause fast drop if active
             }
         });
 
